@@ -1,9 +1,31 @@
 
 import streamlit as st
-import requests
+import joblib
+import pandas as pd
+
+from pathlib import Path
 from datetime import date, time
 
-API_URL = "http://127.0.0.1:8000/predict"
+
+# --------------------------------------------------
+# 1. Load trained ML model
+# --------------------------------------------------
+
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "flight_fare_model.pkl"
+
+
+@st.cache_resource
+def load_model():
+    return joblib.load(MODEL_PATH)
+
+
+model = load_model()
+
+
+# --------------------------------------------------
+# 2. Streamlit page configuration
+# --------------------------------------------------
 
 st.set_page_config(
     page_title="Flight Fare Predictor",
@@ -11,21 +33,53 @@ st.set_page_config(
     layout="centered"
 )
 
+
+# --------------------------------------------------
+# 3. Application heading
+# --------------------------------------------------
+
 st.title("✈️ Flight Fare Prediction")
-st.write("Enter your flight details to estimate the ticket fare.")
+
+st.write(
+    "Enter your flight details below to estimate "
+    "the flight ticket fare using Machine Learning."
+)
+
+
+# --------------------------------------------------
+# 4. Dropdown options
+# --------------------------------------------------
 
 airlines = [
-    "Air Asia", "Air India", "GoAir", "IndiGo",
-    "Jet Airways", "Jet Airways Business",
-    "Multiple carriers", "Multiple carriers Premium economy",
-    "SpiceJet", "Trujet", "Vistara", "Vistara Premium economy"
+    "Air Asia",
+    "Air India",
+    "GoAir",
+    "IndiGo",
+    "Jet Airways",
+    "Jet Airways Business",
+    "Multiple carriers",
+    "Multiple carriers Premium economy",
+    "SpiceJet",
+    "Trujet",
+    "Vistara",
+    "Vistara Premium economy"
 ]
 
-sources = ["Banglore", "Chennai", "Delhi", "Kolkata", "Mumbai"]
+sources = [
+    "Banglore",
+    "Chennai",
+    "Delhi",
+    "Kolkata",
+    "Mumbai"
+]
 
 destinations = [
-    "Hyderabad", "Cochin", "Delhi",
-    "Banglore", "Kolkata", "New Delhi"
+    "Hyderabad",
+    "Cochin",
+    "Delhi",
+    "Banglore",
+    "Kolkata",
+    "New Delhi"
 ]
 
 additional_info = [
@@ -40,21 +94,38 @@ additional_info = [
     "red-eye flight"
 ]
 
+
+# --------------------------------------------------
+# 5. Flight details form
+# --------------------------------------------------
+
 with st.form("flight_form"):
 
     st.subheader("Flight Information")
 
-    airline = st.selectbox("Airline", airlines)
+    airline = st.selectbox(
+        "Airline",
+        airlines
+    )
 
     col1, col2 = st.columns(2)
 
     with col1:
-        source = st.selectbox("Source", sources)
+        source = st.selectbox(
+            "Source",
+            sources
+        )
 
     with col2:
-        destination = st.selectbox("Destination", destinations)
+        destination = st.selectbox(
+            "Destination",
+            destinations
+        )
 
-    total_stops = st.selectbox("Number of Stops", [0, 1, 2, 3, 4])
+    total_stops = st.selectbox(
+        "Number of Stops",
+        [0, 1, 2, 3, 4]
+    )
 
     journey_date = st.date_input(
         "Journey Date",
@@ -81,16 +152,30 @@ with st.form("flight_form"):
         value=180
     )
 
-    info = st.selectbox("Additional Information", additional_info)
+    info = st.selectbox(
+        "Additional Information",
+        additional_info
+    )
 
-    submitted = st.form_submit_button("Predict Flight Fare")
+    submitted = st.form_submit_button(
+        "Predict Flight Fare"
+    )
+
+
+# --------------------------------------------------
+# 6. Prediction
+# --------------------------------------------------
 
 if submitted:
 
     if source == destination:
-        st.error("Source and destination must be different.")
+
+        st.error(
+            "Source and destination must be different."
+        )
 
     else:
+
         payload = {
             "Airline": airline,
             "Source": source,
@@ -107,24 +192,29 @@ if submitted:
         }
 
         try:
-            response = requests.post(API_URL, json=payload, timeout=30)
 
-            if response.status_code == 200:
-                result = response.json()
+            input_data = pd.DataFrame([payload])
 
-                st.success("Prediction completed!")
+            prediction = model.predict(input_data)
 
-                st.metric(
-                    label="Estimated Flight Fare",
-                    value=f"₹{result['predicted_fare']:,.2f}"
-                )
+            predicted_fare = float(prediction[0])
 
-            else:
-                st.error(f"API Error: {response.status_code}")
-                st.write(response.json())
+            st.success(
+                "Flight fare prediction completed successfully!"
+            )
 
-        except requests.exceptions.ConnectionError:
+            st.metric(
+                label="Estimated Flight Fare",
+                value=f"₹{predicted_fare:,.2f}"
+            )
+
+            st.caption(
+                "This is an estimated fare generated "
+                "by the Machine Learning model."
+            )
+
+        except Exception as e:
+
             st.error(
-                "Cannot connect to FastAPI. "
-                "Please make sure your backend server is running."
+                f"An error occurred during prediction: {e}"
             )
